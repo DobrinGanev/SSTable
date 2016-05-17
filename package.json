@@ -1,0 +1,19 @@
+{
+  "name": "sstable",
+  "version": "0.0.1",
+  "description": "Sorted String Table",
+  "main": "index.js",
+  "scripts": {
+    "test": "mocha"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/disordinary/SSTable.git"
+  },
+  "author": "Ryan McCarvill <ryan@disordinary.com> (http://www.disordinary.com)",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/disordinary/SSTable/issues"
+  },
+  "homepage": "https://github.com/disordinary/SSTable#readme"
+}
