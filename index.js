@@ -23,14 +23,14 @@ class SSTable {
 
 		if (!fs.existsSync(this._path)){
 			this._writable = true;
-			this._fd = fs.openSync( path , 'w' ); 
+			this._fd = fs.openSync( this._path , 'w' ); 
 			this._headerPlaceHolderSync( );
 		    cb( null , this );
 		} else {
 			this._writable = false;
 			this._size = fs.statSync( this._path ).size;
 
-			this._fd = fs.openSync( path , 'r' ); 
+			this._fd = fs.openSync( this._path , 'r' ); 
 			this._loadHeaderInfoSync( );
 			this._loadIndex( ( err ) => {
 				cb( err , this );
