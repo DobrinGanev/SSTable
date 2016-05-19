@@ -1,6 +1,6 @@
 {
   "name": "sstable",
-  "version": "0.0.1",
+  "version": "0.1.2",
   "description": "Sorted String Table",
   "main": "index.js",
   "scripts": {
@@ -15,5 +15,8 @@
   "bugs": {
     "url": "https://github.com/disordinary/SSTable/issues"
   },
-  "homepage": "https://github.com/disordinary/SSTable#readme"
+  "homepage": "https://github.com/disordinary/SSTable#readme",
+  "dependencies": {
+    
+  }
 }

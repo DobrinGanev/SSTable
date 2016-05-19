@@ -5,13 +5,21 @@ const doc_size_pad = Array(max_doc_size).fill().reduce(prev => prev = (prev ||  
 const max_table_size = 10; //max table size is aprox 1 GB
 const table_size_pad = Array(max_table_size).fill().reduce(prev => prev = (prev ||  "") + "0"); //the padding string for they bytes, 8 0s
 const version = 1;
+const start_content_seperator = String.fromCharCode(2); //start of text ascii
+const start_heading_seperator = String.fromCharCode(1); //start of heading ascii
+const record_seperator = String.fromCharCode(30); //record seperator ascii
+
+const default_options = {
+	id : 'id',
+	json_aware : false
+}
+
 var fs = require('fs');
 
 class SSTable {
 	constructor( path , options , cb ) {
-		this._options = options = options || {
-			seperate_key_file : false
-		}
+		this._options = Object.assign( { } , default_options , options || { } );
+			
 		this._fd;
 		this._path = path;
 		this._size = 0;
@@ -20,6 +28,9 @@ class SSTable {
 		this._lookupOffset = 0; //the offset for the end of the main data / the start of the lookup data
 		this._key_list_offset = { }; //the first offset of the first character of a key
 		this._keys_offset = { };
+		this._key = this._options.id;
+		this._json_aware = this._options.json_aware;
+		this._events = { }; // a list of events that are being listened to on the SSTable
 
 		if (!fs.existsSync(this._path)){
 			this._writable = true;
@@ -39,18 +50,33 @@ class SSTable {
 		}
 	}
 
-	//create a sstable from a dictionary of k_v_pairs
-	create( dictionary_of_k_v_pairs , cb ) {
+
+	//create a sstable from an array of objects
+	create( array_of_objects , cb ) {
 		if( !this._writable ) {
 			cb( new Error( "This SSTable is non mutable. Try creating a new table and merging this one in." ));
+			return;
+		}
+		if( this._json_aware) {
+			array_of_objects.sort( ( a , b ) => {
+				var a_key = a[ this._key ];
+				var b_key = b[ this._key ];
+				if( a_key < b_key ) {
+					return -1;
+				}
+				if( a_key > b_key ) {
+					return 1;
+				}
+				return 0; //must be equal, this shouldn't be though...
+			} );
+		} else {
+			array_of_objects.sort();
 		}
 
 		var write_size = 0;
 
-		var keys = Object.keys( dictionary_of_k_v_pairs );
-		keys.sort( );
 		
-		this._write_from_array( keys , dictionary_of_k_v_pairs , ( err ) => {
+		this._write_from_sorted_array( array_of_objects , ( err ) => {
 			
 			//finish writing by placing the in memory quick lookup list at the bottom of the document
 			let buffer = new Buffer( JSON.stringify( this._key_list_offset ) );
@@ -70,37 +96,56 @@ class SSTable {
 
 	}
 
-	_write_from_array( keys , data , cb ) {
-		if( keys.length < 1 ) {
+	_write_from_sorted_array( an_array_of_documents , cb ) {
+		if( an_array_of_documents.length < 1 ) {
 			cb( );
 			return;
 		}
-			var key = keys.shift( );
 
+	
+			let data = an_array_of_documents.shift();
+			
+
+			let key = "";
+			if( this._json_aware ) {
+				key = data[ this._key ];
+			} else {
+				key = data;
+			}
+			
+			
+			//create information for content file
 			if( !this._key_list_offset.hasOwnProperty( key[ 0 ] ) ) {
 				this._key_list_offset[ key[ 0 ] ] = this._size;
 			}
-			if( this._options.seperate_key_file ) {
-				if( this._keys_offset.hasOwnProperty( key ) ) {
-					this._keys_offset[ key ].push( this._size );
-				} else {
-					this._keys_offset[ key ] = [ this._size ];
-				}
+			
+
+			//instead of below we should emit a key created event with the key name, the key offset , and the key size
+			if( this._keys_offset.hasOwnProperty( key ) ) {
+				this._keys_offset[ key ].push( this._size );
+			} else {
+				this._keys_offset[ key ] = [ this._size ];
 			}
+		
 
-			var kv_pair =  JSON.stringify( { k : key , v : JSON.stringify( data[ key ] ) } );
-
-			var bytes = pad( doc_size_pad , Buffer.byteLength( kv_pair ));
-			var buffer = new Buffer( bytes + kv_pair );	
+			var buffer = this._create_record(  data );//new Buffer( bytes + kv_pair );	
 
 			 fs.write(this._fd, buffer , 0 , buffer.byteLength , this._size , ( err ) => {
 
 				this._size += buffer.byteLength;
-				this._write_from_array( keys , data , cb );
+				this._write_from_sorted_array(  an_array_of_documents , cb );
 			 });
 
 	}
-
+	/**
+	* Returns a Buffer of a document
+	*/
+	_create_record( doc ) {
+	
+		var data = JSON.stringify( doc ) + record_seperator;
+		var bytes = pad( doc_size_pad , Buffer.byteLength( data ));
+		return new Buffer( bytes + data );
+	}
 
 
 	_loadIndex( cb ){
@@ -140,9 +185,10 @@ class SSTable {
 	_readItem( start , cb ) {
 		this._read( start , max_doc_size -1  , 
 				( err , offset , buffer ) => { 
-					this._read( offset , parseInt( buffer ) ,
+					this._read( offset , parseInt( buffer ) - 1 , //we -1 to take into account the record seperator character
 						( err , offset , buffer ) => {
-							cb( err , offset , buffer );
+
+							cb( err , offset + 1 , buffer ); //we +1 to take into account the record seperator character
 						} );
 				} );
 	}
@@ -172,8 +218,8 @@ class SSTable {
 	_seek( offset , key , cb ) {
 		this._readItem( offset , ( err , offset , data ) => {
 			let doc = JSON.parse( data );
-			if( doc.k === key ) {
-				return cb( null , data );
+			if( doc[ this._key ] === key ) {
+				return cb( null , doc );
 			}
 			this._seek( offset , key , cb  );
 		} );
@@ -197,12 +243,57 @@ class SSTable {
 		} );
 	}
 
-	offset( offset , cb ) {
+	log( message ) {
+		console.log( message );
+	}
 
+	offset( offset , cb ) {
+		this._readItem( offset , cb );
 	}
 
 	offsetRange( offset_start , offset_end , cb ) {
 
+	}
+
+	all_iteraterable( ) {
+		var iterator = this._all_iteraterable( next );
+		function next( ) {
+			console.log("NEXT");
+			iterator.next() 
+		}
+		iterator.next();
+
+
+		return iterator;
+	}
+
+	* _all_iteraterable( done ) {
+		
+		let this_offset = max_table_size + 2; //take into account the header
+		var yielded_data = "rumple";
+		console.log("S");
+		//console.log(caller.offset);
+		yield this.offset( this_offset , ( err , end_offset , data ) => { 
+			this_offset = end_offset;
+			yielded_data = data;
+			done();
+		});
+
+		console.log("X ", yielded_data );
+		
+		//console.log( yielded_data );
+		/*caller.offset( this_offset , ( err , end_offset , data ) => {
+			caller.log( message );
+			this_offset = end_offset;
+			yielded_data = data;
+			console.log( data );
+			console.log("HERE");
+			//return data;
+			//iterator.next();
+		});*/
+			yield yielded_data;
+
+		//	}
 	}
 
 }
