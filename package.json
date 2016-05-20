@@ -1,6 +1,6 @@
 {
   "name": "sstable",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Sorted String Table",
   "main": "index.js",
   "scripts": {
