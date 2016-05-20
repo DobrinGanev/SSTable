@@ -13,7 +13,7 @@ function runByOne(generatorFunction) {
     generatorItr.next()
 }
 
-let testData = [
+/*let testData = [
 	{ email : 'ryan@place.com' , age : '34' , name : 'Ryan' },
 	{ email : 'chantelle@place.com' , age : '26' , name : 'Chantelle' },
 	{ email : 'nikki@place.com' , age : '37' , name : 'Nikki' },
@@ -24,21 +24,29 @@ let testData = [
 	{ email : 'thomas@place.com' , age : '24' , name : 'Thomas' },
 	{ email : 'claire@place.com' , age : '60' , name : 'Claire' },
 	{ email : 'sam@place.com' , age : '24' , name : 'Sam' }
-]
+]*/
 
-new SSTable( "_test.sst" , { id : 'email' , json_aware : true } , ( err , sstable ) => {
-	sstable.create( testData , ( value , err ) => {
-		sstable.seek( 'jim@place.com' , ( err , value ) => {
-			console.log( err , value );
-			require('fs').unlink('_test.sst');
-		} );
-	});
+/*new SSTable( "_test.sst" , { id : 'email' , json_aware : true } , ( err , sstable ) => {
+//	sstable.writeFromArray( testData , ( value , err ) => {
+//		sstable.seek( 'jim@place.com' , ( err , value ) => {
+//			console.log( err , value );
+		//	require('fs').unlink('_test.sst');
+//		} );
+//	});
 	
-	var x = sstable.all_iteraterable( );
-	//console.log( x.next() );
-	//console.log( x.next() );
+	var x = sstable.toStream();
+	x.pipe(process.stdout);
+	/*var x = sstable.all_iteraterable( );
+	console.log( x.next() );
+	console.log( x.next() );*/
 	//console.log( x.next() );
 	
+//} );
+
+new SSTable( "_new.sst" , { id : 'email' , json_aware : true } , ( err , newSSTable ) => {
+	new SSTable( "_test.sst" , { id : 'email' }, ( _ , oldSSTable ) => {
+		newSSTable.mergeLog( oldSSTable );
+	} );
 } );
 
 
