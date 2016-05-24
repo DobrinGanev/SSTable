@@ -5,6 +5,7 @@ var SSTable = require('../index.js');
 
 var fs = require('fs');
 
+//allows me to use a gnerator for async events, simplifies tests
 function runByOne(generatorFunction) {
     var generatorItr = generatorFunction(resume);
     function resume( err , value ) {
@@ -13,7 +14,7 @@ function runByOne(generatorFunction) {
     generatorItr.next()
 }
 
-/*let testData = [
+let testData = [
 	{ email : 'ryan@place.com' , age : '34' , name : 'Ryan' },
 	{ email : 'chantelle@place.com' , age : '26' , name : 'Chantelle' },
 	{ email : 'nikki@place.com' , age : '37' , name : 'Nikki' },
@@ -24,7 +25,28 @@ function runByOne(generatorFunction) {
 	{ email : 'thomas@place.com' , age : '24' , name : 'Thomas' },
 	{ email : 'claire@place.com' , age : '60' , name : 'Claire' },
 	{ email : 'sam@place.com' , age : '24' , name : 'Sam' }
-]*/
+]
+
+describe( 'Create and insert data from an unordered array' , ( ) => {
+	it( 'insertion tests' , ( done ) => {
+		
+	} );
+
+	it( 'the object should be immutable' , ( done ) => {
+
+	} );
+
+});
+
+describe( 'Merging an existing SSTable with logs' , ( ) => {
+	it( 'should work...' , ( done ) => {
+
+	});
+} );
+
+describe( 'tear down' , ( ) => {
+
+} );
 
 /*new SSTable( "_test.sst" , { id : 'email' , json_aware : true } , ( err , sstable ) => {
 //	sstable.writeFromArray( testData , ( value , err ) => {

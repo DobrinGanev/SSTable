@@ -1,4 +1,4 @@
-//todo rename key_list to index.
+
 
 const max_doc_size = 8; //max doc (key value pair) size of 9.99 MB
 const doc_size_pad = Array(max_doc_size).fill().reduce(prev => prev = (prev ||  "") + "0"); //the padding string for they bytes, 8 0s
@@ -32,6 +32,7 @@ class SSTable {
 	 * @return {SSTable}
 	 */
 	constructor( path , options , cb ) {
+		
 		this._options = Object.assign( { } , default_options , options || { } );
 			
 		this._fd; 						//the file discriptor for this table
@@ -44,6 +45,11 @@ class SSTable {
 		this._key = this._options.id; 	//the primary key in an object, used for sorting
 		this._events = { }; 			// a list of events that are being listened to on the SSTable
 
+		//Load the table
+		this._load( cb );
+	}
+
+	_load( cb ) {
 		//Load the table
 		if ( !fs.existsSync( this._path ) ){
 			this._writable = true;
@@ -65,13 +71,18 @@ class SSTable {
 				return cb( e );
 			} 
 			this._loadHeaderInfoSync( );
-			this._loadTableOfContents( ( err ) => {
-				cb( err , this );
-			} );
+			
+			//if this table is not empty then load the contents
+			if( this._contentsStart > max_table_size + 2 ) {
+				this._loadTableOfContents( ( err ) => {
+					cb( err , this );
+				} );
+			} else {
+				cb( null , this );
+			}
 
 		}
 	}
-
 
 	/**
 	 * Takes an array of objects and sorts them by key before writing the SSTable
@@ -152,6 +163,8 @@ class SSTable {
 
 				this._size += buffer.byteLength;
 				this._write_from_sorted_array(  an_array_of_documents , cb );
+
+				this._fireEvents( "RecordAdded" , [ this._size , data ] );
 			 });
 
 	}
@@ -258,6 +271,7 @@ class SSTable {
 	 * @param  {Function( Error )}
 	 */
 	mergeLog( sstable , log , cb ) {
+
 		let temp_holder = { };  //to merge we hold everything in memory, this is just a quick hack to get things working
 								// eventually we will have to do it with the live streams.
 		if( !this._writable ) {
@@ -273,12 +287,14 @@ class SSTable {
 		sstableStream.on('end', () => {
 		    let logStream = log.toStream( );
 		    logStream.on('data', ( log ) => {
-			    log = JSON.parse( log );
-			   	if( log.verb == 'del' ) {
-			   		delete temp_holder[ log.data[ this._key ] ];
-			   	} else {
-			   		temp_holder[ log.data[ this._key ] ] = log.data
-			   	}
+		    	if( log ) {
+				    log = JSON.parse( log );
+				   	if( log.verb == 'del' ) {
+				   		delete temp_holder[ log.doc[ this._key ] ];
+				   	} else {
+				   		temp_holder[ log.doc[ this._key ] ] = log.doc
+				   	}
+			    }	
 			});
 
 			logStream.on('end', () => {
@@ -286,7 +302,10 @@ class SSTable {
 				for( let key of Object.keys( temp_holder ) ) {
 					output.push( temp_holder[ key ] );
 				}
-			    this.writeFromArray( temp_holder , cb );
+
+			    this.writeFromArray( output , ( err ) => {
+			    	cb( err );
+			    } );
 			});
 		});
 	}
@@ -303,6 +322,7 @@ class SSTable {
 	}
 	/**
 	 * Goes through from a start point and tries to find an object with a key
+	 * @async
 	 * @param  {int}
 	 * @param  {string}
 	 * @param  {Function( Error , Object)}
@@ -319,11 +339,38 @@ class SSTable {
 
 	/**
 	 * a public API for _readItem
+	 * @async
 	 */
 	offset( offset , cb ) {
 		this._readItem( offset , cb );
 	}
+	/**
+	 * add an event listener
+	 * @async
+	 * @param  {string} event name
+	 * @param  {Function} the call back when an event is fired
+	 */
+	on( name , cb ) {
+		if( !this._events.hasOwnProperty( name ) ) {
+			this._events[ name ] = [ ];
+		}
 
+		this._events[ name ].push( cb );
+		return this._events[ name ].length;
+	}
+
+	/**
+	 * fires event callback
+	 * @param  {string} the name of the event
+	 * @param  {[arguments to fire]}
+	 */
+	_fireEvents( name , args ) {
+		if( this._events.hasOwnProperty( name ) ) {
+			this._events[ name ].forEach( ( value ) => {
+				value( ...args );
+			});
+		}
+	}
 
 	/**
 	 * returns a read stream of this table
@@ -332,6 +379,7 @@ class SSTable {
 			var rs = stream.Readable();
 			let this_offset = max_table_size + 2;
 			rs._read = function () {
+
 				if( this_offset >= this._contentsStart ) {
 					return rs.push( null );
 				}
@@ -341,6 +389,10 @@ class SSTable {
 				});
 			}.bind( this );
 			return rs;
+	}
+
+	close( ) {
+		fs.close( this._fd );
 	}
 
 }
