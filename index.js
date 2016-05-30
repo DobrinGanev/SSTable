@@ -161,10 +161,13 @@ class SSTable {
 
 			 fs.write(this._fd, buffer , 0 , buffer.byteLength , this._size , ( err ) => {
 
-				this._size += buffer.byteLength;
+			 	this._fireEvents( "RecordAdded" , [ this._size , data ] );
+			 	this._size += buffer.byteLength;
+				
 				this._write_from_sorted_array(  an_array_of_documents , cb );
 
-				this._fireEvents( "RecordAdded" , [ this._size , data ] );
+				
+
 			 });
 
 	}
